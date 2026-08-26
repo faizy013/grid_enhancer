@@ -1,5 +1,4 @@
 .form-grid-container.enhanced-grid-container {
-    // overflow-y: auto;
     border: 1px solid var(--table-border-color);
     border-radius: var(--border-radius-md);
     overflow-x: clip !important;
@@ -32,10 +31,9 @@
     .grid-row {
         .data-row.row {
             flex-wrap: nowrap;
-            // display: grid;
-            // grid-auto-flow: column;
 
             .col {
+                flex: 0 0 100px;
                 max-width: 100px !important;
                 min-width: 100px !important;
                 border-bottom: 1px solid var(--table-border-color);
@@ -45,6 +43,13 @@
                     border-bottom: 1px solid var(--table-border-color);
 
                 }
+            }
+
+            .col[class*="custom-"],
+            .col[class*="col-xs-"] {
+                flex-grow: 1;
+                flex-shrink: 0;
+                max-width: none !important;
             }
 
             .col.custom-1 {
@@ -90,6 +95,7 @@
 
             .row-check,
             .row-index {
+                flex: 0 0 50px;
                 max-width: 50px !important;
                 min-width: 50px !important;
             }
@@ -101,8 +107,9 @@
     .slidecontainer {
         width: 100%;
     }
-
     .enhanced-slider {
+        --thumb-width: 30%;
+
         -webkit-appearance: none;
         appearance: none; 
         width: 100%;
@@ -122,7 +129,7 @@
     .enhanced-slider::-webkit-slider-thumb {
         -webkit-appearance: none;
         appearance: none;
-        width: 30%;
+        width: var(--thumb-width);
         height: 10px;
         background-color: grey;
         border-radius: 8px;
@@ -130,7 +137,7 @@
     }
 
     .enhanced-slider::-moz-range-thumb {
-        width: 30%;
+        width: var(--thumb-width);
         height: 10px;
         background-color: grey;
         border-radius: 8px;
@@ -143,4 +150,5 @@
         background: #d3d3d3;
         border-radius: 8px;
     }
+    
 }

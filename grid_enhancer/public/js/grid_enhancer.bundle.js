@@ -1,33 +1,12 @@
 import GridRow from './grid_row';
 import Grid from './grid';
 
-// class Custom_GridRow extends GridRow {
 
-// 	validate_columns_width() {
-// 		let total_column_width = 0.0;
 
-// 		this.selected_columns_for_grid.forEach((row) => {
-// 			if (row.columns && row.columns > 0) {
-// 				total_column_width += cint(row.columns);
-// 			}
-// 		});
 
-// 		// if (total_column_width && total_column_width > 10) {
-// 		// 	frappe.throw(__("The total column width cannot be more than 10."));
-// 		// }
-// 	}
 
-// 	show_form() {
-// 		super.show_form()
 
-// 		$(this.grid.form_grid).removeClass("relative-important");
-// 	}
-// 	hide_form() {
-// 		super.hide_form()
 
-// 		$(this.grid.form_grid).addClass("relative-important");
-// 	}
-// }
 class Custom_GridRow extends GridRow {
 
 	refresh_dependency() {
@@ -93,7 +72,6 @@ class Custom_Grid extends Grid {
 								data-action="delete_all_rows">
 								${__("Delete All")}
 							</button>
-							<!-- hack to allow firefox include this in tabs -->
 							<button type="button" class="btn btn-xs btn-secondary grid-add-row">
 								${__("Add Row")}
 							</button>
@@ -126,7 +104,6 @@ class Custom_Grid extends Grid {
 		this.form_grid = this.wrapper.find(".form-grid");
 
 
-		// enhance slider changes
 		this.form_grid.addClass("relative-important");
 		this.form_grid_container = this.wrapper.find(".form-grid-container");
 		this.enhanced_slider = this.wrapper.find(".enhanced-slider");
@@ -134,10 +111,11 @@ class Custom_Grid extends Grid {
 		this.enhanced_slider.on("input", function (event) {
 			const value = event.target.value;
 			me.form_grid.css("left", `-${value}px`)
-			me.setup_scrollable_width()
 		})
 
+		this.setup_trackpad_scroll();
 
+		this.setup_scrollbar_resize_observer();
 
 
 		this.setup_add_row();
@@ -162,11 +140,9 @@ class Custom_Grid extends Grid {
 	make_head() {
 		if (this.prevent_build) return;
 
-		// labels
 		if (this.header_row) {
 			$(this.parent).find(".grid-heading-row .grid-row").remove();
 		}
-		// implement custom class
 		this.header_row = new Custom_GridRow({
 			parent: $(this.parent).find(".grid-heading-row"),
 			parent_df: this.df,
@@ -175,7 +151,6 @@ class Custom_Grid extends Grid {
 			grid: this,
 			configure_columns: true,
 		});
-		// implement custom class
 		this.header_search = new Custom_GridRow({
 			parent: $(this.parent).find(".grid-heading-row"),
 			parent_df: this.df,
@@ -192,6 +167,8 @@ class Custom_Grid extends Grid {
 		}
 
 		this.filter_applied && this.update_search_columns();
+
+		this.setup_scrollable_width();
 	}
 
 	render_result_rows($rows, append_row) {
@@ -218,7 +195,6 @@ class Custom_Grid extends Grid {
 				grid_row.doc = d;
 				grid_row.refresh();
 			} else {
-				// implement custom class
 				grid_row = new Custom_GridRow({
 					parent: $rows,
 					parent_df: this.df,
@@ -250,7 +226,6 @@ class Custom_Grid extends Grid {
 		for (var ci in fields) {
 			var _df = fields[ci];
 
-			// get docfield if from fieldname
 			let df =
 			    this.user_defined_columns && this.user_defined_columns.length > 0
 			        ? _df
@@ -269,7 +244,6 @@ class Custom_Grid extends Grid {
 					this.update_default_colsize(df);
 				}
 
-				// attach formatter on refresh
 				if (
 					df.fieldtype == "Link" &&
 					!df.formatter &&
@@ -283,15 +257,14 @@ class Custom_Grid extends Grid {
 				}
 
 				total_colsize += df.colsize;
-				if (total_colsize > 100) break; // stop adding columns, but still finish setup
+				if (total_colsize > 100) break;
 				this.visible_columns.push([df, df.colsize]);
 			}
 
 		}
 
-		// redistribute if total-col size is less than 12
 		var passes = 0;
-		while (total_colsize < 11 && passes < 12) { // Adjusted loop conditions
+		while (total_colsize < 11 && passes < 12) {
 			for (var i in this.visible_columns) {
 				var df = this.visible_columns[i][0];
 				var colsize = this.visible_columns[i][1];
@@ -301,7 +274,6 @@ class Custom_Grid extends Grid {
 						["Int", "Currency", "Float", "Check", "Percent"].indexOf(df.fieldtype) !==
 						-1
 					) {
-						// don't increase col size of these fields in first 3 passes
 						continue;
 					}
 
@@ -313,41 +285,92 @@ class Custom_Grid extends Grid {
 			}
 			passes++;
 		}
-
-		// set width of scrollable area
-		this.setup_scrollable_width()
-		this.verify_overflow_columns_width()
 	}
 
+	setup_trackpad_scroll() {
+		const container = this.form_grid_container[0];
+		if (!container) return;
+		const me = this;
+
+		container.addEventListener(
+			"wheel",
+			function (e) {
+				if (Math.abs(e.deltaX) <= Math.abs(e.deltaY)) return;
+
+				if (me.enhanced_slider[0].style.display === "none") return;
+
+				e.preventDefault();
+
+				let delta = e.deltaX;
+				if (e.deltaMode === 1) delta *= 16;
+
+				const max = parseFloat(me.enhanced_slider.prop("max")) || 0;
+				let current_left = Math.abs(parseFloat(me.form_grid.css("left")) || 0);
+				current_left = Math.min(Math.max(current_left + delta, 0), max);
+
+				me.form_grid.css("left", `-${current_left}px`);
+				me.enhanced_slider.val(current_left);
+			},
+			{ passive: false }
+		);
+	}
 
 	setup_scrollable_width() {
-		let width = 200
-		this.visible_columns.forEach(column => {
-			width += column[1] * 50 + 100
-		});
-		if (width > this.form_grid_container[0].clientWidth) {
-			this.enhanced_slider.prop("max", width - this.form_grid_container[0].clientWidth)
-			this.enhanced_slider.prop("style", "display:block")
+		if (!this.visible_columns || !this.form_grid_container[0]) return;
+
+		const header_row = this.form_grid[0].querySelector(".grid-heading-row .data-row.row");
+		if (!header_row) return;
+
+		const containerWidth = this.form_grid_container[0].getBoundingClientRect().width;
+		if (!containerWidth) return;
+
+		const row_left = header_row.getBoundingClientRect().left;
+		let content_right = row_left;
+		for (const col of header_row.children) {
+			const col_right = col.getBoundingClientRect().right;
+			if (col_right > content_right) content_right = col_right;
+		}
+		const content_width = content_right - row_left;
+
+		const OVERFLOW_TOLERANCE_PX = 1;
+
+		if (content_width - containerWidth > OVERFLOW_TOLERANCE_PX) {
+			const scrollable_distance = Math.ceil(content_width - containerWidth);
+			this.enhanced_slider.prop("max", scrollable_distance);
+			this.enhanced_slider.prop("style", "display:block");
+
+			let current_left = Math.abs(parseFloat(this.form_grid.css("left")) || 0);
+			if (current_left > scrollable_distance) {
+				current_left = scrollable_distance;
+				this.form_grid.css("left", `-${current_left}px`);
+			}
+			this.enhanced_slider.val(current_left);
+
+			let thumbPercent = (containerWidth / content_width) * 100;
+			thumbPercent = Math.max(thumbPercent, 8);
+			this.enhanced_slider[0].style.setProperty("--thumb-width", `${thumbPercent}%`);
 		} else {
 			this.form_grid.css("left", `0px`)
-			this.enhanced_slider.prop("max", this.form_grid_container[0].clientWidth)
+			this.enhanced_slider.prop("max", containerWidth)
 			this.enhanced_slider.prop("style", "display:none")
 			this.enhanced_slider.prop("value", 0)
 		}
 	}
 
-	verify_overflow_columns_width() {
-		let width = 200
-		this.visible_columns.forEach(column => {
-			width += column[1] * 50 + 100
-		});
+	setup_scrollbar_resize_observer() {
+		if (this._scrollbar_resize_observer) {
+			this._scrollbar_resize_observer.disconnect();
+		}
 
-		if (width > this.form_grid_container[0].clientWidth) {
-			this.form_grid_container.addClass('enhanced-grid-container')
-			this.enhanced_slider.prop("style", "display:block")
+		if (typeof ResizeObserver !== "undefined") {
+			this._scrollbar_resize_observer = new ResizeObserver(() => {
+				this.setup_scrollable_width();
+			});
+			this._scrollbar_resize_observer.observe(this.form_grid_container[0]);
 		} else {
-			this.enhanced_slider.prop("style", "display:none")
-			this.enhanced_slider.prop("value", 0)
+			$(window).off("resize.grid_enhancer").on("resize.grid_enhancer", () => {
+				this.setup_scrollable_width();
+			});
 		}
 	}
 
@@ -358,7 +381,6 @@ frappe.ui.form.ControlTable = class CustomControlTable extends frappe.ui.form.Co
 	make() {
 		super.make();
 
-		// add title if prev field is not column / section heading or html
 		this.grid = new Custom_Grid({
 			frm: this.frm,
 			df: this.df,
@@ -371,4 +393,66 @@ frappe.ui.form.ControlTable = class CustomControlTable extends frappe.ui.form.Co
 
 
 }
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
