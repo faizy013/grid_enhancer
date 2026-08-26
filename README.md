@@ -12,13 +12,13 @@ Enhanced and customizable grid views for Frappe Framework with improved usabilit
 ### Screenshots
 
 **Scrolled to the right**
-![Child table scrolled right](public/images/child_table_scrolled_right.png)
+![Child table scrolled right](grid_enhancer/public/images/child_table_scrolled_right.png)
 
 **Sidebar view**
-![Child table sidebar](public/images/child_table_sidebar.png)
+![Child table sidebar](grid_enhancer/public/images/child_table_sidebar.png)
 
 **Trackpad scroll behavior**
-![Child table trackpad scroll](public/images/child_table_trackpad_scroll.png)
+![Child table trackpad scroll](grid_enhancer/public/images/child_table_trackpad_scroll.png)
 
 ### Installation
 
