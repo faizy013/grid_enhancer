@@ -150,5 +150,17 @@
         background: #d3d3d3;
         border-radius: 8px;
     }
+
+    .form-grid .data-row.row .col.grid-col-frozen {
+        position: relative;
+        z-index: 2;
+        background-color: var(--fg-color, #fff);
+        box-shadow: 1px 0 0 0 var(--border-color);
+        will-change: transform;
+    }
+
+    .grid-heading-row .data-row.row .col.grid-col-frozen {
+        z-index: 3; /* header frozen columns stay above body frozen columns */
+    }
     
 }
