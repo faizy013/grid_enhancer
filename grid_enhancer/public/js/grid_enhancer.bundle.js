@@ -1,12 +1,6 @@
 import GridRow from './grid_row';
 import Grid from './grid';
 
-
-
-
-
-
-
 class Custom_GridRow extends GridRow {
 
 	refresh_dependency() {
@@ -32,6 +26,30 @@ class Custom_GridRow extends GridRow {
 	hide_form() {
 		super.hide_form()
 		$(this.grid.form_grid).addClass("relative-important");
+	}
+
+	update_user_settings_for_grid() {
+		if (!this.selected_columns_for_grid || !this.frm) {
+			return;
+		}
+
+		let value = {};
+		value[this.grid.doctype] = this.selected_columns_for_grid;
+		frappe.model.user_settings.save(this.frm.doctype, "GridView", value).then((r) => {
+			frappe.model.user_settings[this.frm.doctype] = r.message || r;
+			this.grid.load_frozen_columns();
+			this.grid.apply_frozen_columns_class();
+			this.grid.reset_grid();
+		});
+	}
+
+	reset_user_settings_for_grid() {
+		frappe.model.user_settings.save(this.frm.doctype, "GridView", null).then((r) => {
+			frappe.model.user_settings[this.frm.doctype] = r.message || r;
+			this.grid.load_frozen_columns();
+			this.grid.apply_frozen_columns_class();
+			this.grid.reset_grid();
+		});
 	}
 }
 
@@ -103,7 +121,6 @@ class Custom_Grid extends Grid {
 
 		this.form_grid = this.wrapper.find(".form-grid");
 
-
 		this.form_grid.addClass("relative-important");
 		this.form_grid_container = this.wrapper.find(".form-grid-container");
 		this.enhanced_slider = this.wrapper.find(".enhanced-slider");
@@ -111,12 +128,12 @@ class Custom_Grid extends Grid {
 		this.enhanced_slider.on("input", function (event) {
 			const value = event.target.value;
 			me.form_grid.css("left", `-${value}px`)
+			me.update_frozen_columns_offset();
 		})
 
 		this.setup_trackpad_scroll();
 
 		this.setup_scrollbar_resize_observer();
-
 
 		this.setup_add_row();
 
@@ -130,11 +147,48 @@ class Custom_Grid extends Grid {
 
 		this.setup_allow_bulk_edit();
 		this.setup_check();
+		this.load_frozen_columns();
 		if (this.df.on_setup) {
 			this.df.on_setup(this);
 		}
+	}
 
+	load_frozen_columns() {
+		this.doctype = this.doctype || this.df.options;
 
+		let user_settings =
+			(this.frm &&
+				frappe.model.user_settings[this.frm.doctype] &&
+				frappe.model.user_settings[this.frm.doctype]["GridView"] &&
+				frappe.model.user_settings[this.frm.doctype]["GridView"][this.doctype]) ||
+			[];
+
+		this.frozen_fieldnames = user_settings.filter((c) => c.frozen).map((c) => c.fieldname);
+	}
+
+	apply_frozen_columns_class() {
+		const frozen = this.frozen_fieldnames || [];
+		const grid_rows_to_update = [
+			this.header_row,
+			this.header_search,
+			...(this.grid_rows || []),
+		];
+
+		grid_rows_to_update.forEach((grid_row) => {
+			if (!grid_row || !grid_row.columns) return;
+			Object.keys(grid_row.columns).forEach((fieldname) => {
+				const $col = grid_row.columns[fieldname];
+				const is_frozen = frozen.includes(fieldname);
+				$col.toggleClass("grid-col-frozen", is_frozen);
+				if (is_frozen) {
+					$col.attr("data-frozen-order", frozen.indexOf(fieldname));
+				} else {
+					$col.removeAttr("data-frozen-order");
+				}
+			});
+		});
+
+		this.update_frozen_columns_offset();
 	}
 
 	make_head() {
@@ -169,6 +223,8 @@ class Custom_Grid extends Grid {
 		this.filter_applied && this.update_search_columns();
 
 		this.setup_scrollable_width();
+		this.apply_frozen_columns_class();
+		this.update_frozen_columns_offset();
 	}
 
 	render_result_rows($rows, append_row) {
@@ -208,6 +264,7 @@ class Custom_Grid extends Grid {
 
 			this.grid_rows_by_docname[d.name] = grid_row;
 		}
+		this.apply_frozen_columns_class();
 	}
 
 	setup_visible_columns() {
@@ -310,6 +367,7 @@ class Custom_Grid extends Grid {
 
 				me.form_grid.css("left", `-${current_left}px`);
 				me.enhanced_slider.val(current_left);
+				me.update_frozen_columns_offset();
 			},
 			{ passive: false }
 		);
@@ -355,6 +413,8 @@ class Custom_Grid extends Grid {
 			this.enhanced_slider.prop("style", "display:none")
 			this.enhanced_slider.prop("value", 0)
 		}
+
+		this.update_frozen_columns_offset();
 	}
 
 	setup_scrollbar_resize_observer() {
@@ -374,8 +434,14 @@ class Custom_Grid extends Grid {
 		}
 	}
 
-}
+	update_frozen_columns_offset() {
+		if (!this.frozen_fieldnames || !this.frozen_fieldnames.length) return;
 
+		let current_left = Math.abs(parseFloat(this.form_grid.css("left")) || 0);
+		this.form_grid.find(".grid-col-frozen").css("transform", `translateX(${current_left}px)`);
+	}
+
+}
 
 frappe.ui.form.ControlTable = class CustomControlTable extends frappe.ui.form.ControlTable {
 	make() {
@@ -387,72 +453,6 @@ frappe.ui.form.ControlTable = class CustomControlTable extends frappe.ui.form.Co
 			parent: this.wrapper,
 			control: this,
 		});
-
 	}
-
-
-
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 

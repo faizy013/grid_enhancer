@@ -386,25 +386,29 @@ export default class GridRow {
 			});
 
 		this.grid_settings_dialog.set_primary_action(__("Update"), () => {
-			this.validate_columns_width();
+			this.validate_sticky_columns_width();
 			this.columns = {};
 			this.update_user_settings_for_grid();
+			document.activeElement && document.activeElement.blur();
 			this.grid_settings_dialog.hide();
 		});
 
 		this.grid_settings_dialog.set_secondary_action_label(__("Reset to default"));
 		this.grid_settings_dialog.set_secondary_action(() => {
 			this.reset_user_settings_for_grid();
+			document.activeElement && document.activeElement.blur();
 			this.grid_settings_dialog.hide();
 		});
 	}
 
 	setup_columns_for_dialog() {
 		this.selected_columns_for_grid = [];
+		let frozen_fieldnames = this.grid.frozen_fieldnames || [];
 		this.grid.visible_columns.forEach((row) => {
 			this.selected_columns_for_grid.push({
 				fieldname: row[0].fieldname,
 				columns: row[0].columns || row[0].colsize,
+				frozen: frozen_fieldnames.includes(row[0].fieldname),
 			});
 		});
 	}
@@ -528,7 +532,7 @@ export default class GridRow {
 							<div class='col-1' style='padding-top: 4px;'>
 								<a style='cursor: grabbing;'>${frappe.utils.icon("drag", "xs")}</a>
 							</div>
-							<div class='col-6 col-md-8' style='padding-right:0px; padding-top: 5px;'>
+							<div class='col-5 col-md-7' style='padding-right:0px; padding-top: 5px;'>
 								${__(docfield.label, null, docfield.parent)}
 							</div>
 							<div class='col-3 col-md-2' style='padding-left:0px; padding-top: 2px; margin-top:-2px;' title='${__(
@@ -538,6 +542,10 @@ export default class GridRow {
 								style='height: 24px; max-width: 80px; background: var(--bg-color);'
 									value='${docfield.columns || cint(d.columns)}'
 									data-fieldname='${docfield.fieldname}' style='background-color: var(--modal-bg); display: inline'>
+							</div>
+							<div class='col-1 text-center' style='padding-top: 6px;' title='${__("Freeze Column")}'>
+								<input type='checkbox' class='freeze-column' data-fieldname='${docfield.fieldname}'
+									${d.frozen ? "checked" : ""}>
 							</div>
 							<div class='col-1' style='padding-top: 3px;'>
 								<a class='text-muted remove-field' data-fieldname='${docfield.fieldname}'>
@@ -555,6 +563,7 @@ export default class GridRow {
 		this.select_on_focus();
 		this.update_column_width();
 		this.remove_selected_column();
+		this.handle_freeze_checkbox();
 	}
 
 	prepare_handler_for_sort() {
@@ -605,15 +614,37 @@ export default class GridRow {
 			});
 	}
 
-	validate_columns_width() {
-		let total_column_width = 0.0;
+	validate_sticky_columns_width() {
+		let total_frozen_width = 0.0;
+		let found_non_frozen = false;
 
 		this.selected_columns_for_grid.forEach((row) => {
-			if (row.columns && row.columns > 0) {
-				total_column_width += cint(row.columns);
+			if (row.frozen) {
+				if (found_non_frozen) {
+					frappe.throw(
+						__("Sticky columns must be placed at the beginning of the column list.")
+					);
+				}
+
+				if (row.columns && row.columns > 0) {
+					total_frozen_width += cint(row.columns);
+				}
+			} else {
+				found_non_frozen = true;
+
+				if (row.columns && cint(row.columns) > 10) {
+					frappe.throw(
+						__("Column width cannot exceed to '10'. Please reduce the width of column '{0}'", [__(row.fieldname)])
+					);
+				}
 			}
 		});
 
+		if (total_frozen_width > 6) {
+			frappe.throw(
+				__("Total width of sticky columns cannot exceed 6.")
+			);
+		}
 	}
 
 	remove_selected_column() {
@@ -631,6 +662,47 @@ export default class GridRow {
 
 				this.selected_columns_for_grid = selected_columns_for_grid;
 				$(this.fields_html_wrapper).find(`[data-fieldname="${fieldname}"]`).remove();
+			});
+	}
+
+	handle_freeze_checkbox() {
+		$(this.fields_html_wrapper)
+			.find(".freeze-column")
+			.off("change")
+			.on("change", (e) => {
+				let checked_boxes = $(this.fields_html_wrapper).find(".freeze-column:checked");
+
+				if (checked_boxes.length > 3) {
+					e.target.checked = false;
+					document.activeElement && document.activeElement.blur();
+					frappe.msgprint(__("You can stick a maximum of 3 columns."));
+					return;
+				}
+
+				let fieldname = e.target.dataset.fieldname;
+				let row = this.selected_columns_for_grid.find((r) => r.fieldname === fieldname);
+
+				if (e.target.checked) {
+					let total_frozen_width = row ? cint(row.columns) : 0;
+					checked_boxes.each((i, box) => {
+						if (box === e.target) return;
+						let r = this.selected_columns_for_grid.find(
+							(x) => x.fieldname === box.dataset.fieldname
+						);
+						if (r) total_frozen_width += cint(r.columns);
+					});
+
+					if (total_frozen_width > 6) {
+						e.target.checked = false;
+						document.activeElement && document.activeElement.blur();
+						frappe.msgprint(__("Total width of sticky columns cannot exceed 6."));
+						return;
+					}
+				}
+
+				if (row) {
+					row.frozen = e.target.checked;
+				}
 			});
 	}
 
@@ -844,6 +916,12 @@ export default class GridRow {
 				: "";
 		add_class += ["Check"].indexOf(df.fieldtype) !== -1 ? " text-center" : "";
 
+		let is_frozen =
+			this.grid.frozen_fieldnames && this.grid.frozen_fieldnames.includes(df.fieldname);
+		if (is_frozen) {
+			add_class += " grid-col-frozen";
+		}
+
 		let grid;
 		let grid_container;
 
@@ -1001,6 +1079,11 @@ export default class GridRow {
 
 		$col.df = df;
 		$col.column_index = ci;
+
+		if (is_frozen) {
+			let order = this.grid.frozen_fieldnames.indexOf(df.fieldname);
+			$col.attr("data-frozen-order", order);
+		}
 
 		this.columns[df.fieldname] = $col;
 		this.columns_list.push($col);
@@ -1443,215 +1526,4 @@ export default class GridRow {
 		this.set_field_property(fieldname, "read_only", editable ? 0 : 1);
 	}
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
